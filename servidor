@@ -1,19 +1,34 @@
 #!/usr/bin/env python3
 import asyncio
 from tcp import Servidor
-
 import re
+
+class Msg:
+    re001 = b':server 001 %s :Welcome\r\n'
+    err432 = b':server 432 %s %s :Erroneous nickname\r\n'
+    err422 = b':server 422 %s :MOTD File is missing\r\n'
+
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
+
 
 def sair(conexao):
     print(conexao, 'conexão fechada')
     conexao.fechar()
 
+
 def send_res(conexao, dados):
     if dados.startswith(b'PING'):
         dados2 = dados.split (b' ')[1]
-        conexao.enviar(b':server PONG server :' + dados2)   
+        conexao.enviar(b':server PONG server :' + dados2)
+    if dados.startswith(b'NICK'):
+        nome = dados.split(b' ')[1].strip()
+        if validar_nome(nome):
+            conexao.enviar(Msg.re001 % nome)
+            conexao.enviar(Msg.err422 % nome) 
+        else:
+            conexao.enviar(Msg.err432 % (b'*',nome) )
+            
 
 
 def dados_recebidos(conexao, dados):
@@ -37,6 +52,7 @@ def dados_recebidos(conexao, dados):
     else:
         send_res(conexao, dados)    
      
+
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
     conexao.sobra = b''
