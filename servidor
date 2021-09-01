@@ -3,10 +3,15 @@ import asyncio
 from tcp import Servidor
 import re
 
+nomes = dict()
+
 class Msg:
-    re001 = b':server 001 %s :Welcome\r\n'
-    err432 = b':server 432 %s %s :Erroneous nickname\r\n'
+    re001 =  b':server 001 %s :Welcome\r\n'
+    rexxx =  b':%s NICK %s\r\n'
     err422 = b':server 422 %s :MOTD File is missing\r\n'
+    err432 = b':server 432 %s %s :Erroneous nickname\r\n'
+    err433 = b':server 433 %s %s :Nickname is already in use\r\n'
+
 
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
@@ -19,16 +24,26 @@ def sair(conexao):
 
 def send_res(conexao, dados):
     if dados.startswith(b'PING'):
-        dados2 = dados.split (b' ')[1]
-        conexao.enviar(b':server PONG server :' + dados2)
+        dados2 = dados.split(b' ')[1]
+        conexao.enviar(b':server PONG server :' + dados2)  
+
     if dados.startswith(b'NICK'):
         nome = dados.split(b' ')[1].strip()
         if validar_nome(nome):
-            conexao.enviar(Msg.re001 % nome)
-            conexao.enviar(Msg.err422 % nome) 
+            if nome.lower() not in nomes:
+                if conexao.nome_user != b'*':
+                    nomes.update(({nome.lower(): conexao}))
+                    conexao.enviar(Msg.rexxx% (conexao.nome_user, nome))
+                    conexao.nome_user = nome
+                else:  
+                    nomes.update(({nome.lower(): conexao}))  
+                    conexao.nome_user = nome
+                    conexao.enviar(Msg.re001 % nome)
+                    conexao.enviar(Msg.err422 % nome)
+            elif nome.lower() in nomes:
+                conexao.enviar(Msg.err433 % (conexao.nome_user, nome))
         else:
-            conexao.enviar(Msg.err432 % (b'*',nome) )
-            
+            conexao.enviar(Msg.err432 % (conexao.nome_user,nome) )              
 
 
 def dados_recebidos(conexao, dados):
@@ -53,9 +68,11 @@ def dados_recebidos(conexao, dados):
         send_res(conexao, dados)    
      
 
+
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
     conexao.sobra = b''
+    conexao.nome_user = b'*'
     conexao.registrar_recebedor(dados_recebidos)
 
 servidor = Servidor(6667)
