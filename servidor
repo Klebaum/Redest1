@@ -14,11 +14,38 @@ class Msg:
     err432 = b':server 432 %s %s :Erroneous nickname\r\n'
     err433 = b':server 433 %s %s :Nickname is already in use\r\n'
 
-class Canal:
-    re403  = b':server 403 canal :No such channel\r\n'
-    reJoin = b':%s JOIN :canal\r\n'
+class Can:
+    re403  = b':server 403 %s :No such %s\r\n'
+    reJoin = b':%s JOIN :%s\r\n'
     err353 = b':server 353 %s = canal :%s %s %s\r\n'
     err366 = b':server 366 %s canal :End of /NAMES list\r\n'
+    partindo = b':%s PART %s\r\n'
+
+
+class Canal:
+    def __init__(self, nome_canal) -> None:
+        self.nome = nome_canal
+        self.membros = list()
+        canal[nome_canal.lower()] = self
+
+    def add_membro(self, nome_membro):
+        self.membros.append(nome_membro.lower())
+        for membro in self.membros:
+            conexao = nomes[membro.lower()]
+            conexao.enviar(Can.reJoin % (nome_membro, self.nome))
+
+    def send_msg(self, remetente, msg):    
+        for membro in self.membros:
+           conexao = nomes[membro] 
+           if membro != remetente.lower(): 
+                conexao.enviar(Msg.priv % (remetente, self.nome, msg))
+
+    def kicka_membro(self, nome_membro):
+        for membro in self.membros:
+            conexao = nomes[membro.lower()]
+            conexao.enviar(Can.partindo % (nome_membro, self.nome))
+        self.membros.remove(nome_membro.lower())
+
 
 
 def validar_nome(nome):
@@ -56,11 +83,24 @@ def send_res(conexao, dados):
     if dados.startswith(b'PRIVMSG'):
         destino = dados.split (b' ')[1]
         msg = dados.split (b' ')[2][1:].strip()
+        if destino.startswith(b'#'):
+            canal[destino.lower()].send_msg(conexao.nome_user, msg)
+            return
         if destino.lower() not in nomes:
             return
         nomes[destino.lower()].enviar(Msg.priv % (conexao.nome_user, destino, msg))
 
-        
+    if dados.startswith(b'JOIN'):
+        nome_canal = dados.split(b' ')[1].strip()
+        if nome_canal.lower() not in canal:
+            Canal(nome_canal)
+        canal[nome_canal.lower()].add_membro(conexao.nome_user)
+
+    if dados.startswith(b'PART'):
+        nome_canal = dados.split(b' ')[1].strip()
+        if nome_canal.lower() in canal:
+            canal[nome_canal.lower()].kicka_membro(conexao.nome_user)
+            
 
 def dados_recebidos(conexao, dados):
     print(conexao, dados)
